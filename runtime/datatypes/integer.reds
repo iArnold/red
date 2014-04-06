@@ -159,6 +159,15 @@ integer: context [
 			]
 		]
 	]
+
+	random: func [
+		int		[red-integer!]
+		seed?	[logic!]
+		return: [integer!]
+ 	][
+		int/value: int/value + 1		; Start with a simple return value to test if it works at all.
+		int/value
+	]
 	
 	form: func [
 		int		   [red-integer!]
