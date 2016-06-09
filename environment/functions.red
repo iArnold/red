@@ -4,7 +4,7 @@ Red [
 	File: 	 %functions.red
 	Tabs:	 4
 	Rights:  "Copyright (C) 2011-2015 Nenad Rakocevic. All rights reserved."
-	License: {
+	License: {TEST
 		Distributed under the Boost Software License, Version 1.0.
 		See https://github.com/red/red/blob/master/BSL-License.txt
 	}
