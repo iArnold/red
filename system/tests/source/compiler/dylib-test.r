@@ -1,5 +1,5 @@
 REBOL [
-	Title:   "Red/System dynamic linbary compiler test script"
+	Title:   "Red/System dynamic library compiler test script"
 	Author:  "Nenad Rakocevic & Peter W A Wood"
 	File: 	 %dylib-test.r
 	Tabs:	 4
