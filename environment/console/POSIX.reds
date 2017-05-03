@@ -153,6 +153,10 @@ winsize!: alias struct! [
 
 #import [
 	LIBC-file cdecl [
+		isatty: "isatty" [
+			fd		[integer!]
+			return:	[integer!]
+		]
 		read: "read" [
 			fd		[integer!]
 			buf		[byte-ptr!]
@@ -207,7 +211,6 @@ fd-read: func [
 		c	[integer!]
 		len [integer!]
 		i	[integer!]
-		p	[byte-ptr!]
 ][
 	if 1 <> read stdin as byte-ptr! utf-char 1 [return -1]
 	c: as-integer utf-char/1
@@ -229,8 +232,7 @@ fd-read: func [
 		]
 		i: i + 1
 	]
-	c: unicode/decode-utf8-char utf-char :len
-	c
+	unicode/decode-utf8-char utf-char :len
 ]
 
 check-special: func [
@@ -266,11 +268,11 @@ check-special: func [
 				#"6" [return KEY_PAGE_DOWN]
 				#"7" [return KEY_HOME]
 				#"8" [return KEY_END]
-				default []
+				default [return KEY_NONE]
 			]
 		]
-		while [all [(as-integer c) <> -1 c <> #"~"]][
-			c: fd-read-char 50
+		if all [(as-integer c) <> -1 c <> #"~"][
+			fd-read-char 50
 		]
 	]
 	KEY_NONE
@@ -365,6 +367,7 @@ get-window-size: func [
 	/local
 		ws	 [winsize!]
 		here [integer!]
+		size [red-pair!]
 ][
 	ws: declare winsize!
 
@@ -386,6 +389,9 @@ get-window-size: func [
 			]
 		]
 	]
+	size: as red-pair! #get system/console/size
+	size/x: columns
+	size/y: ws/rowcol and FFFFh
 ]
 
 reset-cursor-pos: does [
@@ -443,47 +449,50 @@ init: func [
 		so	 [sigaction!]
 		mask [integer!]
 ][
+	console?: 1 = isatty stdin
 	relative-y: 0
 	utf-char: as-c-string allocate 10
 	
-	so: declare sigaction!						;-- install resizing signal trap
-	mask: (as-integer so) + 4
-	sigemptyset mask
-	so/sigaction: as-integer :on-resize
-	so/flags: 0
-	sigaction SIGWINCH so as sigaction! 0
+	if console? [
+		so: declare sigaction!						;-- install resizing signal trap
+		mask: (as-integer so) + 4
+		sigemptyset mask
+		so/sigaction: as-integer :on-resize
+		so/flags: 0
+		sigaction SIGWINCH so as sigaction! 0
 
-	term: declare termios!
-	tcgetattr stdin saved-term					;@@ check returned value
+		term: declare termios!
+		tcgetattr stdin saved-term					;@@ check returned value
 
-	copy-memory 
-		as byte-ptr! term
-		as byte-ptr! saved-term
-		size? term
+		copy-memory 
+			as byte-ptr! term
+			as byte-ptr! saved-term
+			size? term
 
-	term/c_iflag: term/c_iflag and not (
-		TERM_BRKINT or TERM_ICRNL or TERM_INPCK or TERM_ISTRIP or TERM_IXON
-	)
-	term/c_oflag: term/c_oflag and not TERM_OPOST
-	term/c_cflag: term/c_cflag or TERM_CS8
-	term/c_lflag: term/c_lflag and not (
-		TERM_ECHO or TERM_ICANON or TERM_IEXTEN or TERM_ISIG
-	)
-	#case [
-		any [OS = 'MacOSX OS = 'FreeBSD] [
-			cc: (as byte-ptr! term) + (4 * size? integer!)
+		term/c_iflag: term/c_iflag and not (
+			TERM_BRKINT or TERM_ICRNL or TERM_INPCK or TERM_ISTRIP or TERM_IXON
+		)
+		term/c_oflag: term/c_oflag and not TERM_OPOST
+		term/c_cflag: term/c_cflag or TERM_CS8
+		term/c_lflag: term/c_lflag and not (
+			TERM_ECHO or TERM_ICANON or TERM_IEXTEN or TERM_ISIG
+		)
+		#case [
+			any [OS = 'MacOSX OS = 'FreeBSD] [
+				cc: (as byte-ptr! term) + (4 * size? integer!)
+			]
+			true [cc: (as byte-ptr! term) + (4 * size? integer!) + 1]
 		]
-		true [cc: (as byte-ptr! term) + (4 * size? integer!) + 1]
+		cc/TERM_VMIN:  as-byte 1
+		cc/TERM_VTIME: as-byte 0
+
+		tcsetattr stdin TERM_TCSADRAIN term
+
+		poller/fd: stdin
+		poller/events: OS_POLLIN
+
+		buffer: allocate buf-size
 	]
-	cc/TERM_VMIN:  as-byte 1
-	cc/TERM_VTIME: as-byte 0
-
-	tcsetattr stdin TERM_TCSADRAIN term
-
-	poller/fd: stdin
-	poller/events: OS_POLLIN
-
-	buffer: allocate buf-size
 ]
 
 restore: does [

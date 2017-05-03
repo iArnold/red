@@ -17,7 +17,8 @@ Red [
 ;;@@ Temporary patch to allow inclusion in user code.
 unless system/console [
 	system/console: context [
-        history: make block! 200
+		history: make block! 200
+		size: 0x0
 	]
 ]
 ;; End patch
@@ -69,6 +70,7 @@ unless system/console [
 			#include %POSIX.reds
 		]
 
+		console?:	yes
 		buffer:		declare byte-ptr!
 		pbuffer:	declare byte-ptr!
 		input-line: declare red-string!
@@ -114,7 +116,7 @@ unless system/console [
 				str2	[red-string!]
 				head	[integer!]
 		][
-			#call [default-input-completer str]
+			#call [red-complete-input str yes]
 			stack/top: stack/arguments + 1
 			result: as red-block! stack/top
 			num: block/rs-length? result
@@ -131,13 +133,17 @@ unless system/console [
 				line: input-line
 				string/rs-reset line
 
+				str2: as red-string! block/rs-head result
+				head: str2/head
+				str2/head: 0
 				either num = 1 [
-					str2: as red-string! block/rs-head result
-					head: str2/head
-					str2/head: 0
 					string/concatenate line str2 -1 0 yes no
 					line/head: head
 				][
+					string/rs-reset saved-line
+					string/concatenate saved-line str2 -1 0 yes no
+					saved-line/head: head
+					block/rs-next result				;-- skip first one
 					until [
 						string/concatenate line as red-string! block/rs-head result -1 0 yes no
 						string/append-char GET_BUFFER(line) 32
@@ -152,9 +158,7 @@ unless system/console [
 		]
 
 		add-history: func [
-			str			[red-string!]
-			/local
-				saved	[integer!]
+			str	[red-string!]
 		][
 			str/head: 0
 			unless zero? string/rs-length? str [
@@ -222,7 +226,7 @@ unless system/console [
 					all [offset < tail cnt < size]
 				][
 					cp: string/get-char offset unit
-					w: wcwidth? cp
+					w: either all [0001F300h <= cp cp <= 0001F5FFh][2][wcwidth? cp]
 					cnt: switch w [
 						1  [cnt + 1]
 						2  [either size - cnt = 1 [x: 2 cnt + 3][cnt + 2]]	;-- reach screen edge, handle wide char
@@ -280,7 +284,7 @@ unless system/console [
 			set-cursor-pos line offset bytes
 		]
 
-		edit: func [
+		console-edit: func [
 			prompt-str [red-string!]
 			/local
 				line   [red-string!]
@@ -417,6 +421,12 @@ unless system/console [
 					]
 					default [
 						if c > 31 [
+							#if OS = 'Windows [						;-- optimize for Windows
+								if all [D800h <= c c <= DF00h][		;-- USC-4
+									c: c and 03FFh << 10			;-- lead surrogate decoding
+									c: (03FFh and fd-read) or c + 00010000h
+								]
+							]
 							either string/rs-tail? line [
 								string/append-char GET_BUFFER(line) c
 								#if OS = 'Windows [					;-- optimize for Windows
@@ -437,7 +447,37 @@ unless system/console [
 			]
 			line/head: 0
 		]
-		
+
+		stdin-readline: func [
+			/local
+				c	 [integer!]
+				s	 [series!]
+		][
+			s: GET_BUFFER(input-line)
+			while [true][
+				#either OS = 'Windows [
+					c: stdin-read
+				][
+					c: fd-read
+				]
+				either any [c = -1 c = as-integer lf][exit][
+					s: string/append-char s c
+				]
+			]
+		]
+
+		edit: func [
+			prompt-str [red-string!]
+		][
+			either console? [
+				console-edit prompt-str
+				restore
+				print-line ""
+			][
+				stdin-readline
+			]
+		]
+
 		setup: func [
 			line [red-string!]
 			hist [red-block!]
@@ -456,8 +496,6 @@ _set-buffer-history: routine [line [string!] hist [block!]][
 
 _read-input: routine [prompt [string!]][
 	terminal/edit prompt
-	terminal/restore
-	print-line ""
 ]
 
 ask: function [

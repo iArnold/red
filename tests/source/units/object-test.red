@@ -100,6 +100,15 @@ Red [
 		blk: [a: 99]
 		obj12: object blk
 		--assert obj12/a = 99
+	
+	--test-- "basic-13"
+		b13-a: 0
+		b13-o: make object! [
+			b13-a: 0
+		]
+		set in b13-o 'b13-a 1
+		--assert 0 == b13-a
+		--assert 1 == b13-o/b13-a
 
 ===end-group===
 
@@ -404,6 +413,7 @@ Red [
 		--assert list/1/v = 0
 		--assert list/2/v = 1
 
+#if config/dev-mode? = no [							;-- libRedRT does not support multiple-inheritance
 	--test-- "inherit-5"
 		base5: context [
 			b: 123
@@ -441,7 +451,7 @@ Red [
 
 	--test-- "inherit-8"
 		--assert new/foo = 1070
-
+]
 	--test-- "inherit-9"
 		base9: context [
 			v: 123456
@@ -1366,6 +1376,7 @@ Red [
 			--assert list/1/v = 0
 			--assert list/2/v = 1
 
+#if config/dev-mode? = no [							;-- libRed does not support multiple-inheritance
 		--test-- "loc-inherit-5"
 			base5: context [
 				b: 123
@@ -1403,7 +1414,7 @@ Red [
 
 		--test-- "loc-inherit-8"
 			--assert new/foo = 1070
-
+]
 		--test-- "loc-inherit-9"
 			base9: context [
 				v: 123456
@@ -1877,12 +1888,12 @@ Red [
 			--assert 'b = in ino1/o/o/o 'b
 			--assert 'f = in ino1/o/o/o 'f
 			--assert 's = in ino1/o/o/o 's
-comment { ######################################################################		
+		
 		--test-- "loc-in5"
 			in5-f: func[] [make object! [a: 1]]
-			--assert 1 = get in in5-f 'a	
-		######################################################################## }
-
+			if system/state/interpreted? [
+				--assert 1 = get in in5-f 'a	
+			]
 	]
 
 	local-obj-fun
@@ -2100,9 +2111,7 @@ comment { ######################################################################
 		ocs4-o: make object! [a: 1]
 		--assert 'A = in ocs4-o 'A
 		--assert 'a = in ocs4-o 'A
-		;; the following assertions are commented out as in ocs4-o 'A returns 'A not 'a
-		;--assert 'a == in ocs4-o 'A
-		;--assert not ('A == in ocs4-o 'A)
+		--assert 'A == in ocs4-o 'A
 
 ===end-group===
 
